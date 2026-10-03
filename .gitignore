@@ -1,0 +1,47 @@
+# Quartus build products.  NOTE: releases/*.rbf is NOT ignored -- the shipped
+# bitstream is a committed part of this tree (MiSTer-devel convention).  Only
+# output_files/, which is where a local compile lands, is excluded.
+db
+greybox_tmp
+incremental_db
+output_files
+simulation
+hc_output
+scaler
+hps_isw_handoff
+vip
+*_sim
+.qsys_edit
+PLLJ_PLLSPE_INFO.txt
+*.bak
+*.orig
+*.rej
+*.qdf
+*.rpt
+*.smsg
+*.summary
+*.done
+*.jdi
+*.pin
+*.sof
+*.qws
+*.ppf
+*.ddb
+build_id.v
+c5_pin_model_dump.txt
+*.sopcinfo
+*.csv
+*.f
+*.cmp
+*.sip
+*.spd
+*.bsf
+*~
+*.xml
+*_netlist
+*.cdf
+**/.DS_Store
+
+# ... except this one: jt51 ships its own upstream file list, and `*.f` above
+# would otherwise drop a vendored file from the published tree.
+!rtl/lib/jt51/hdl/jt51.f

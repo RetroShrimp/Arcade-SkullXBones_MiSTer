@@ -1,0 +1,191 @@
+# Synthesis source list for the Skull & Crossbones core.
+# Every source file is listed here, by hand.  Never add files from the
+# Quartus GUI (it rewrites SkullXBones.qsf), and never put game logic in sys/
+# (that directory is the unmodified MiSTer framework).
+
+set_global_assignment -name QIP_FILE sys/sys.qip
+
+# ---- clocking ----
+# clk_sys = 57.272727 MHz = 4 x 14.318181 MHz (PLL 50 MHz M=63 N=5 C=11), the
+# Badlands/Xybots/Vindicators PLL; outclk_1 is the same rate, phase-shifted,
+# for the SDRAM_CLK pin.
+set_global_assignment -name QIP_FILE rtl/pll.qip
+
+# ---- video: raster and analog output ----
+# The SOS-2 sync generator at 95F (schematic sheet 1): 456 counts of 7M per
+# line, two 14.318181 MHz pixels per count (912 x 262, 672 x 240 visible).
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_sos2_sync.sv
+# rtl/video/skullxbo_testpat.sv (a bring-up test pattern) is deliberately not
+# listed: nothing instantiates it.
+# Analog-output alignment (CRT H-Size / H-Position, VGA H/V-Shift), outside the
+# core.  analog_hsize.sv is Umberto Parisi's (rmonic79) line-buffer resampler,
+# used unchanged — see NOTICE.md.
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/analog_hsize.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_analog_adjust.sv
+
+# ============================================================================
+#  The 68000 main board (schematic sheets 1-4) and the memory path
+# ============================================================================
+# `skullxbo_main` is the top of this half; everything below is its child.
+#
+#   skullxbo_cpu           fx68k 245C paced by /7M, the IPL sync and /VPA
+#   skullxbo_addr_decode   LS32 170E, LS139 140A, LS138 130A, LS139 170J,
+#                          LS00 120C (MOBMSB), /ROM, /SLAPSTIK, /VIDRAM,
+#                          LS139 220F
+#   skullxbo_dtack         LS163A 230F + LS11 90E + LS74 130C-B / 110C-B +
+#                          LS27 210F: 0 waits, 2 for the EEPROM, the /WAITHBL
+#                          stall, and VCYCDONE for the video RAM
+#   skullxbo_irq           LS74 130C-A / 110C-A and the LS00/LS10 IPL encoder
+#   skullxbo_watchdog      the power-on reset, LS90 70F, LS00 10D, JP1
+#   skullxbo_inputs        LS257 80B/100C and the F244 150C status nibble
+#   skullxbo_eeprom_28c16  the 28C16-45 at 170A and the LS74 30H unlock flop
+#   skullxbo_nvram_io      the MiSTer ioctl index-2 save/restore channel
+#   skullxbo_vram          the two 16-bit video RAMs, the seven F253/LS253
+#                          address muxes, the F174 latches, PAL16R8 110E
+#                          (136072-2143) from its fuse dump, the byte lanes
+#                          with the /PFUPPER two-pulse colour write, the LS373
+#                          CPU read latches and the F373 200K link register
+#   skullxbo_prog_rom      the 512 KB program ROM in SDRAM, behind a cache
+#   skullxbo_rom_loader    the ioctl index-0 ROM download router
+#   skullxbo_sdram_loader  byte stream -> 16-bit SDRAM words
+#   skullxbo_sdram         the SDRAM controller, CL2, bursts of 1/2/4/8
+#   skullxbo_gfx_mem       the SDRAM arbiter: download, playfield, motion
+#                          objects, CPU ROM, MSM6295 samples
+set_global_assignment -name SEARCH_PATH rtl/main
+
+# The 68000 is fx68k (Jorge Cwik), unmodified under rtl/lib/fx68k/ with its
+# own LICENSE and README (GPL-3.0-or-later; NOTICE.md).
+#
+# Do not remove the SEARCH_PATH line below.  fx68k.sv reads its microcode
+# with `$readmemb("microrom.mem", ...)` / `$readmemb("nanorom.mem", ...)` by
+# relative path, and Quartus finds the files only through this line.  If they
+# are not found, Quartus does not error: the microcode ROMs synthesise empty
+# and the core boots to a black screen.  Analysis & Synthesis prints
+# `Info (10905)` for each .mem file it reads; check for it.
+set_global_assignment -name SEARCH_PATH rtl/lib/fx68k
+# uaddrPla.sv is the opcode PLA between Ir and the microcode address, the path
+# SkullXBones.sdc gives fx68k's own documented multicycle exception
+# (rtl/lib/fx68k/fx68k.txt "Timing analysis").
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/lib/fx68k/fx68k.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/lib/fx68k/fx68kAlu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/lib/fx68k/uaddrPla.sv
+
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/skullxbo_cpu.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/skullxbo_addr_decode.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/skullxbo_dtack.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/skullxbo_irq.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/skullxbo_watchdog.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/skullxbo_inputs.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/skullxbo_eeprom_28c16.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/skullxbo_nvram_io.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/skullxbo_vram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/skullxbo_prog_rom.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/skullxbo_rom_loader.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/skullxbo_sdram_loader.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/skullxbo_sdram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/mem/skullxbo_gfx_mem.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/main/skullxbo_main.sv
+
+# ============================================================================
+#  The video block (schematic sheets 1 and 5-10)
+# ============================================================================
+# `skullxbo_video` is the top of this half; everything below is its child
+# (as is skullxbo_sos2_sync, listed above).
+#
+#   skullxbo_gfx_client  the SDRAM fetch adapter: one hardware stamp fetch =
+#                        one SDRAM transaction
+#   skullxbo_sos1        SOS-1 137550-001: one model, three strap sets
+#                        (195N sheet 5, 20N + 25L sheet 8)
+#   skullxbo_hstrobes    sheet 1: LS74 80E/80F/80C, LS27 210F, LS08 200F,
+#                        LS11 90E, LS10 90C, F174 160H: the board's HBLANK,
+#                        /HSYNC, RSTLB, LINKRES and the delayed 4H family
+#   skullxbo_pfhs        PFHS 137419-104 at 195M, sheet 5: the nine-bit scroll
+#                        register, the scrolled column counter, the 0-7 pixel
+#                        fine delay
+#   skullxbo_pf          sheet 5: LS374 180K/210K, LS175 230N, the six-bank
+#                        stamp-ROM address, SOS-1 195N and PFHS 195M
+#   skullxbo_alpha       sheet 5: LS374 190K/220K, the 27256 at 250K, LS194A
+#                        230K/230L, LS174 190F, ANIRQ and ANBO
+#   skullxbo_vscroll     sheet 6: LS191 150H/130H/140H and the two /LOAD terms
+#   skullxbo_mob         MOB 137593-001 at 130K, sheet 6: the SLIP list walk,
+#                        the F373 200K link latch, the vertical match and the
+#                        /MOBWR register file
+#   skullxbo_mo_fetch    sheets 6-8: the five-plane stamp fetch, LS373
+#                        60N/70N/50N/80N, LS157 110M/100M, SOS-1 20N + 25L
+#   skullxbo_lb          sheet 9: the two line buffers, the F163 counters, the
+#                        write gates, F398 50J/40J + F174 60J
+#   skullxbo_prio        sheet 10: PAL16L8 10F (136072-1142) from its fuse
+#                        dump and the five F153 colour-RAM address muxes
+#   skullxbo_cram        sheet 10: colour RAM 40E/50E, the F174 50F/40F
+#                        pipeline, VIDCLK and the one-pixel CPU steal
+#   skullxbo_dac         sheet 10: the three R-2R ladders, the shared RGB0 LSB
+#                        and the F260 pen-zero black pull
+set_global_assignment -name SEARCH_PATH rtl/video
+
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_gfx_client.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_sos1.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_hstrobes.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_pfhs.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_pf.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_alpha.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_vscroll.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_mob.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_mo_fetch.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_lb.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_prio.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_cram.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_dac.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/video/skullxbo_video.sv
+
+# ============================================================================
+#  The JSA Audio II board A047184-02 (schematic 046487-01 rev D, JSA sheets
+#  1-3) and both ends of the SCOM sound link
+# ============================================================================
+# `skullxbo_sound` is the top of the audio board; everything below is its
+# child.
+#
+#   skullxbo_scom        both Atari SCOM 137526-001 customs (120E on the game
+#                        PCB, 3D on the JSA) and the four-wire J1 cable
+#   skullxbo_snd_decode  PAL16L8 136056-2101 at 2D from its fuse dump + LS138 3F
+#   skullxbo_snd_bus     6502A 1D on T65, 6264 2B, 27512 1B with the $3000 bank
+#                        window, the periodic IRQ, the /IRQ wire-OR with the
+#                        YM2151, the SD7:0 read mux, /RESET
+#   skullxbo_snd_io      LS273 4D (/WRIO), LS174 3C (/MIX), LS240 2F (/RDIO)
+#                        and the coin-counter drivers
+#   skullxbo_ym          YM2151 3A through jt51 + the YM3012 5A
+#   skullxbo_oki         MSM6295 6D/E and its four 27512 sample ROMs in SDRAM
+#   skullxbo_snd_iir1    one-pole filter primitive (Q20)
+#   skullxbo_snd_svf     two-pole state-variable filter primitive (Q16)
+#   skullxbo_snd_filter  the 4066 volume ladder, the switched Sallen-Key, the
+#                        TL084 6C OKI filter chain and the 6B mixer
+#
+# T65 (Daniel Wallner and contributors) is VHDL and must be compiled in
+# dependency order: the package, the microcode and the ALU, the core, then the
+# flat-port wrapper skullxbo_snd_bus instantiates.
+set_global_assignment -name VHDL_FILE rtl/lib/T65/T65_Pack.vhd
+set_global_assignment -name VHDL_FILE rtl/lib/T65/T65_MCode.vhd
+set_global_assignment -name VHDL_FILE rtl/lib/T65/T65_ALU.vhd
+set_global_assignment -name VHDL_FILE rtl/lib/T65/T65.vhd
+set_global_assignment -name VHDL_FILE rtl/lib/T65/T65_wrap.vhd
+# jt51 (Jose Tejada, jotego) ships its own QIP; it is used unchanged.
+set_global_assignment -name QIP_FILE rtl/lib/jt51/hdl/jt51.qip
+# klax_oki6295.v (the Klax MiSTer core's MSM6295, GPL-2.0-or-later) is kept
+# unmodified as the source rtl/sound/skullxbo_oki.sv is derived from (see that
+# file's header for what changed).  It is not instantiated, so Quartus prunes
+# it; it is listed so the source list names every third-party file.
+set_global_assignment -name VERILOG_FILE rtl/lib/oki/klax_oki6295.v
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/skullxbo_scom.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/skullxbo_snd_decode.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/skullxbo_snd_bus.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/skullxbo_snd_io.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/skullxbo_ym.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/skullxbo_oki.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/skullxbo_snd_iir1.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/skullxbo_snd_svf.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/skullxbo_snd_filter.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/sound/skullxbo_sound.sv
+
+# ---- core + emu glue ----
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/skullxbo_core.sv
+set_global_assignment -name SDC_FILE SkullXBones.sdc
+set_global_assignment -name SYSTEMVERILOG_FILE Arcade-SkullXBones.sv
